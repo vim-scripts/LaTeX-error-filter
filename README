@@ -1,0 +1,8 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2325
+
+The script is a utility that can be used to glean warning/error information from a latex compile. It will format the output into a format that is easy to read by VIM in the quickfix mode. This utility is useful for people who use VIM to edit LaTeX files, and don't use the VIM-Latex suite (the suite has already the quickfix capability). I don't use it because I think it is making things more complicated rather than simplifying it.
+
+An alternative to using this script is to setup the errorformat variable for latex (see ":help errorformat-latex"), and use the vimlatex script available on this site too (to avoid the problem of broken numbers, and to help vim recognize filenames). But the messages are not as compact as those produced by this script.
+
+Note 1: The filter needs awk to run.
+Note 2: Even though the script is especially useful for people who don't use vim-latex, it is also useful for those who do -- It makes the messages more meaningful (e.g, 1 or 3, instead of 32 or 54, when there are actually only 3 messages on 54 lines). 

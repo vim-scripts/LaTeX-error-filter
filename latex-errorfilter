@@ -1,0 +1,121 @@
+#!/usr/bin/gawk -f
+
+# filter an LaTeX .log file and print a list of warnings and errors
+# Usage:  latex-errorfilter  file.log
+#     or  latex file.tex | latex-errorfilter
+
+/\(|\)/ {
+	str=$0;
+	while(i=match(str, /\)|\(/))
+		if (substr(str, i, 1)==")"){
+		  pop1();
+		  str=substr(str, i+1);
+		}else{
+			str=substr(str, i+1);
+			end=match(str, /\(|\)|[[:space:]]/)
+			push1(substr(str, 1, end?end-1:80))
+			str=substr(str,end)
+		}
+}
+
+# errors: messages[file,line,context]=message
+/^!/ {
+	message = "Error: " substr($0,3)
+	getline
+	messages[readstack1(), substr($1,3)+0, $NF]=message;
+}
+
+# Overfull and Underfull warnings:  boxes[file,line]=message
+/^.+erfull/ {
+	boxes[readstack1(),$NF+0]=$0
+}
+
+/Warning:/ {
+	message="";
+	label=""
+	for(len=0; NF>0; getline){
+		message=message (len==79?"":" ") $0
+		len=length($0)
+	}
+	gsub(/^.*Warning: /, "", message)
+	gsub(/\([^\)]*\)/, "", message)
+	gsub(/[[:space:]]+/, " ", message)
+	$0=message; lineno=$NF+0;
+
+	# change .aux  to .tex if necessary
+	file = gensub(/\.aux$/, "\\.tex", 1, readstack1());
+
+	# treat some special messages about labels
+	if (message ~ /.*Label `.*' multiply defined\..*/){
+		label=gensub(/Label `(.*)' multiply defined\./, "\\1", 1, message)
+		("awk -- '/\\label{" label "}/{l=NR;};END{print l}' " file) | \
+			getline lineno # find last definition of label
+	}
+
+	if (message ~ /.*Reference `.*' on page.*/)
+		label=gensub(/.*Reference `(.*)' on page.*/, "\\1", 1, message)
+
+	# don't want duplicated warnings
+	if (message ~/There were multiply-defined labels\./ ||
+		message ~ /There were undefined references\./)
+		next;
+
+	messages[file,lineno,label]="Warning: "message;
+}
+
+END{
+	# find all useful lines
+	for (combined in messages){
+		split(combined, separate, SUBSEP)
+		lines[separate[1], separate[2]]=1
+	}
+
+	for(combined in messages){
+		split(combined, separate, SUBSEP)
+		file=separate[1];
+		line=separate[2];
+		label=separate[3];
+		printf("%s:%d:%d:%s\n", file, line, findcolumn(file,line,label),
+			messages[combined])
+	}
+
+	for(combined in boxes){
+		split(combined, separate, SUBSEP)
+		printf("%s:%d:1:%s\n", separate[1], separate[2], boxes[combined]);
+	}
+}
+
+function push1(thisvalue){
+	if(thisvalue)
+		stack1[++stack1index] = thisvalue
+	# print "PUSH: " thisvalue
+}
+
+function pop1(   tmpvalue){
+	if (stack1index <1 ){
+	 return ""
+	}
+	tmpvalue = stack1[stack1index]
+	delete stack1[stack1index]
+	--stack1index
+	# print "POP: " tmpvalue
+	return tmpvalue
+}
+
+function readstack1(){ # non destructive pop top
+	return stack1[stack1index]
+}
+
+# find the column of string on a given line in a given file
+function findcolumn(file,number,str,   line,col){
+	if (file && !read[file]){
+		for(line=1;(getline<file)>0;line++)
+			if (lines[file,line])
+				content[file,line]=$0
+		read[file]=1;
+		close(file)
+	}
+	sub(/\\/, "\\\\", str)
+	col=match(content[file,number], str)
+	return col?col:1
+}
